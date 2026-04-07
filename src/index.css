@@ -1,0 +1,46 @@
+:root {
+  --text: #c8cdd8;
+  --text-h: #f4f6fb;
+  --text-muted: #8b93a5;
+  --bg: #080a0e;
+  --panel-bg: rgba(18, 22, 30, 0.82);
+  --panel-border: rgba(255, 255, 255, 0.08);
+  --panel-shadow: 0 18px 50px rgba(0, 0, 0, 0.45);
+  --tag-bg: rgba(107, 140, 255, 0.15);
+  --tag-text: #b8c7ff;
+  --link: #8eb4ff;
+  --close-bg: rgba(255, 255, 255, 0.06);
+  --close-bg-hover: rgba(255, 255, 255, 0.12);
+
+  font-family: system-ui, 'Segoe UI', Roboto, sans-serif;
+  line-height: 1.45;
+  font-weight: 400;
+  color: var(--text);
+  background: var(--bg);
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  min-height: 100svh;
+}
+
+#root {
+  width: 100%;
+  min-height: 100svh;
+  margin: 0;
+}
+
+h1,
+h2 {
+  font-weight: 600;
+}

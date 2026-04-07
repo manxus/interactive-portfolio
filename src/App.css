@@ -1,0 +1,146 @@
+.app {
+  position: relative;
+  width: 100%;
+  min-height: 100svh;
+  overflow: hidden;
+}
+
+.canvas-layer {
+  position: absolute;
+  inset: 0;
+}
+
+.canvas-layer canvas {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+.overlay {
+  position: relative;
+  z-index: 1;
+  pointer-events: none;
+  min-height: 100svh;
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+}
+
+.overlay-top {
+  pointer-events: none;
+  text-align: left;
+  padding: 1.25rem 1.5rem;
+  max-width: 28rem;
+}
+
+.overlay-top h1 {
+  margin: 0 0 0.35rem;
+  font-size: clamp(1.35rem, 3vw, 1.75rem);
+  font-weight: 600;
+  letter-spacing: -0.02em;
+  color: var(--text-h);
+  text-shadow: 0 1px 12px rgba(0, 0, 0, 0.45);
+}
+
+.hint {
+  margin: 0;
+  font-size: 0.9rem;
+  color: var(--text-muted);
+  text-shadow: 0 1px 8px rgba(0, 0, 0, 0.5);
+}
+
+.detail-panel {
+  pointer-events: auto;
+  margin: auto 1rem 1.25rem auto;
+  width: min(22rem, calc(100vw - 2rem));
+  padding: 1.15rem 1.25rem 1.25rem;
+  border-radius: 12px;
+  border: 1px solid var(--panel-border);
+  background: var(--panel-bg);
+  backdrop-filter: blur(14px);
+  box-shadow: var(--panel-shadow);
+  position: relative;
+}
+
+.detail-panel h2 {
+  margin: 0 0 0.6rem;
+  padding-right: 2rem;
+  font-size: 1.2rem;
+  font-weight: 600;
+  color: var(--text-h);
+}
+
+.summary {
+  margin: 0 0 0.85rem;
+  font-size: 0.92rem;
+  line-height: 1.5;
+  color: var(--text);
+}
+
+.tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+  margin: 0 0 0.85rem;
+  padding: 0;
+  list-style: none;
+}
+
+.tags li {
+  font-size: 0.72rem;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  padding: 0.2rem 0.5rem;
+  border-radius: 6px;
+  background: var(--tag-bg);
+  color: var(--tag-text);
+}
+
+.links {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 0.45rem;
+}
+
+.links a {
+  color: var(--link);
+  font-size: 0.9rem;
+  text-decoration: none;
+  border-bottom: 1px solid transparent;
+  transition: border-color 0.15s ease, color 0.15s ease;
+}
+
+.links a:hover {
+  border-bottom-color: var(--link);
+}
+
+.close-btn {
+  position: absolute;
+  top: 0.65rem;
+  right: 0.65rem;
+  width: 2rem;
+  height: 2rem;
+  border: none;
+  border-radius: 8px;
+  background: var(--close-bg);
+  color: var(--text-h);
+  font-size: 1.35rem;
+  line-height: 1;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background 0.15s ease;
+}
+
+.close-btn:hover {
+  background: var(--close-bg-hover);
+}
+
+.close-btn:focus-visible {
+  outline: 2px solid var(--link);
+  outline-offset: 2px;
+}
