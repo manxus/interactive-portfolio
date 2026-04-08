@@ -1,5 +1,5 @@
 import { Quaternion, Vector3 } from 'three'
-import { CELL, getTerrainTopWorld, PLAYER_HALF } from './collision'
+import { CELL, getSupportSurfaceWorld, PLAYER_HALF } from './collision'
 
 const UP = new Vector3(0, 1, 0)
 
@@ -42,11 +42,16 @@ export function rollAxis(dir: Vector3, out: Vector3): void {
   out.copy(UP).cross(dir).normalize()
 }
 
-/** Neighbor cell center; Y matches that column’s surface (step up/down one tier). */
+/**
+ * Neighbor cell center; Y lands on the highest surface in that column at or below the
+ * player’s feet (ignores floating blocks above), so rolls don’t treat air gaps as solid walls.
+ */
 export function rollEndCenter(center: Vector3, dir: Vector3, out: Vector3): void {
   const nx = Math.round(center.x / CELL) * CELL + dir.x * CELL
   const nz = Math.round(center.z / CELL) * CELL + dir.z * CELL
-  const ty = getTerrainTopWorld(nx, nz) + PLAYER_HALF
+  const fromFeet = center.y - PLAYER_HALF
+  const sup = getSupportSurfaceWorld(nx, nz, fromFeet)
+  const ty = Number.isFinite(sup) ? sup + PLAYER_HALF : center.y
   out.set(nx, ty, nz)
 }
 

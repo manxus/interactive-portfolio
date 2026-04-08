@@ -1,4 +1,6 @@
 :root {
+  --font-display: 'Syne', system-ui, sans-serif;
+  --font-body: 'DM Sans', system-ui, 'Segoe UI', Roboto, sans-serif;
   --text: #c8cdd8;
   --text-h: #f4f6fb;
   --text-muted: #8b93a5;
@@ -12,7 +14,7 @@
   --close-bg: rgba(255, 255, 255, 0.06);
   --close-bg-hover: rgba(255, 255, 255, 0.12);
 
-  font-family: system-ui, 'Segoe UI', Roboto, sans-serif;
+  font-family: var(--font-body);
   line-height: 1.45;
   font-weight: 400;
   color: var(--text);
@@ -42,5 +44,21 @@ body {
 
 h1,
 h2 {
+  font-family: var(--font-display);
   font-weight: 600;
+}
+
+.exhibit-label {
+  font-family: var(--font-body);
+  font-size: 0.62rem;
+  font-weight: 600;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--text-h);
+  text-shadow: 0 1px 8px rgba(0, 0, 0, 0.85);
+  white-space: nowrap;
+  max-width: 9rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  text-align: center;
 }

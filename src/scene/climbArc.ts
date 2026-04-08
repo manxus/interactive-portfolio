@@ -1,11 +1,47 @@
 import { CubicBezierCurve3, Quaternion, Vector3 } from 'three'
 import {
+  CELL,
+  EXHIBIT_HALF,
+  getTerrainTopWorld,
+  PLAYER_HALF,
   playerIntersectsExhibitVolume,
   playerIntersectsExhibitVolumeWithHalf,
-  PLAYER_HALF,
 } from './collision'
 
 const WORLD_UP = new Vector3(0, 1, 0)
+
+/** True when start/end share the same grid cell on XZ (shelf climb beside a wall). */
+export function climbSameCellXZ(from: Vector3, to: Vector3): boolean {
+  const fx = Math.round(from.x / CELL) * CELL
+  const fz = Math.round(from.z / CELL) * CELL
+  const tx = Math.round(to.x / CELL) * CELL
+  const tz = Math.round(to.z / CELL) * CELL
+  return fx === tx && fz === tz
+}
+
+/**
+ * Hinge arcs can pull the center through the wall plane. Keep the 1×1 player outside the
+ * neighbor wall column on XZ (unchanged Y) for same-cell face climbs.
+ */
+export function clampBesideWallHingePos(
+  pos: Vector3,
+  from: Vector3,
+  climbDir: Vector3,
+): void {
+  const ix = Math.round(from.x / CELL) * CELL
+  const iz = Math.round(from.z / CELL) * CELL
+  const gap = EXHIBIT_HALF + PLAYER_HALF
+  if (Math.abs(climbDir.x) > 0.5) {
+    const wallCx = ix + climbDir.x * CELL
+    if (climbDir.x < 0) pos.x = Math.max(pos.x, wallCx + gap)
+    else pos.x = Math.min(pos.x, wallCx - gap)
+  }
+  if (Math.abs(climbDir.z) > 0.5) {
+    const wallCz = iz + climbDir.z * CELL
+    if (climbDir.z < 0) pos.z = Math.max(pos.z, wallCz + gap)
+    else pos.z = Math.min(pos.z, wallCz - gap)
+  }
+}
 
 /** Tight match so we don’t hinge when the arc misses `to` (avoids end snaps + wrong rest). */
 const HINGE_END_MATCH_SQ = 0.065 * 0.065
@@ -92,6 +128,45 @@ export function climbEndQuaternion(
 }
 
 const MANTLE_SAMPLES = 48
+
+/** True when `to` is the next cell over on XZ (cardinal mantle onto neighbor). */
+function isOntoNeighborClimb(from: Vector3, to: Vector3): boolean {
+  const dx = Math.abs(to.x - from.x)
+  const dz = Math.abs(to.z - from.z)
+  return (
+    (dx > 0.2 && dx < 1.05 && dz < 0.15) || (dz > 0.2 && dz < 1.05 && dx < 0.15)
+  )
+}
+
+/**
+ * Rise mostly in the approach cell, then step onto the neighbor — avoids diagonal cuts
+ * through a tall stack when hinge is blocked and the classic mantle misses clearance.
+ */
+function buildUpFirstMantle(
+  from: Vector3,
+  to: Vector3,
+  dir: Vector3,
+  perpBase: Vector3,
+  variant: number,
+): CubicBezierCurve3 {
+  const rise = Math.max(0.35, to.y - from.y)
+  const boost =
+    variant >= 48 ? Math.min((variant - 47) * 0.022, 0.42) : 0
+  const v = variant % 48
+  const upPhase = 0.36 + (v % 7) * 0.045
+  const pullBack = 0.2 + (v % 6) * 0.035 + boost
+  const side = ((v >> 2) % 3) * 0.055
+  const sign = v % 2 === 0 ? 1 : -1
+  const p0 = from.clone()
+  const p1 = from.clone().addScaledVector(WORLD_UP, rise * upPhase)
+  const p3 = to.clone()
+  const p2 = to
+    .clone()
+    .addScaledVector(dir, -pullBack)
+    .addScaledVector(perpBase, sign * side)
+    .addScaledVector(WORLD_UP, 0.06 + (v >> 4) * 0.04 + boost * 0.15)
+  return new CubicBezierCurve3(p0, p1, p2, p3)
+}
 
 function mantlePathIsClear(curve: CubicBezierCurve3): boolean {
   const p = new Vector3()
@@ -238,7 +313,7 @@ export function createWallMantleCurve(
   const seamAxis = new Vector3()
   getSeamAxisWorld(dir, seamAxis)
 
-  let tStart = new Vector3().copy(seamAxis).cross(vFrom)
+  const tStart = new Vector3().copy(seamAxis).cross(vFrom)
   if (tStart.lengthSq() < 1e-8) {
     tStart.copy(vFrom).cross(seamAxis)
   }
@@ -256,6 +331,20 @@ export function createWallMantleCurve(
   const outBase = dy < 1.15 ? 0.48 : 0.28 + dy * 0.16
   const hingePull = 0.38 + dy * 0.07
   const upKick = 0.12 + dy * 0.06
+
+  const toFeet = to.y - PLAYER_HALF
+  const wallIx = Math.round(to.x)
+  const wallIz = Math.round(to.z)
+  const wallTop = getTerrainTopWorld(wallIx, wallIz)
+  const tallStackOntoNeighbor =
+    isOntoNeighborClimb(from, to) && wallTop > toFeet + 0.22
+
+  if (tallStackOntoNeighbor) {
+    for (let v = 0; v < 80; v++) {
+      const c = buildUpFirstMantle(from, to, dir, perpBase, v)
+      if (mantlePathIsClear(c)) return c
+    }
+  }
 
   for (const sign of [1, -1] as const) {
     const perp = perpBase.clone().multiplyScalar(sign)
@@ -282,6 +371,10 @@ export function createWallMantleCurve(
       const curve = new CubicBezierCurve3(p0, p1, p2, p3)
       if (mantlePathIsClear(curve)) return curve
     }
+  }
+
+  if (tallStackOntoNeighbor) {
+    return buildUpFirstMantle(from, to, dir, perpBase, 79)
   }
 
   const OUT = (dy < 1.15 ? 0.58 : 0.34 + dy * 0.2) * 1.35
@@ -322,10 +415,10 @@ export function evalMantleSeamRollRotation(
   pivotScratch: Vector3,
   axisScratch: Vector3,
 ): void {
-  const te = climbMantleEase(tLinear)
   getWorldGridTopSeamPivotWorld(from, climbDir, pivotScratch)
   getSeamAxisWorld(climbDir, axisScratch)
   const angle = computeTopSeamHingeAngle(from, to, pivotScratch, axisScratch)
-  qPart.setFromAxisAngle(axisScratch, te * angle)
+  // Match wall-clock climb progress (position still eases via climbMantleEase in evalMantleFrame).
+  qPart.setFromAxisAngle(axisScratch, tLinear * angle)
   quatOut.multiplyQuaternions(qPart, q0)
 }

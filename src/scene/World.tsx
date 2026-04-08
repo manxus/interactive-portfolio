@@ -1,52 +1,82 @@
-import { Grid } from '@react-three/drei'
-import { portfolioEntries } from '../data/portfolio'
+import { Environment } from '@react-three/drei'
+import type { PortfolioEntry } from '../data/portfolio'
+import type { TerrainVoxel } from '../data/terrain'
 import { Exhibit } from './Exhibit'
+import { TerrainBlock } from './TerrainBlock'
+import { WORLD_HALF } from './collision'
+
+const BG = '#0c0e12'
 
 type WorldProps = {
+  terrainVoxels: TerrainVoxel[]
+  portfolioEntries: PortfolioEntry[]
+  draftExhibits: PortfolioEntry[]
   selectedId: string | null
-  onSelectExhibit: (id: string) => void
+  onSelectEntry: (id: string) => void
+  /** When true, exhibit clicks do not open the detail panel (build tools use the ray). */
+  buildMode?: boolean
+  /** Voxel key `x,y,z` for erase-tool hover highlight in dev editor. */
+  terrainEraseHoverKey?: string | null
+  draftEraseHoverId?: string | null
 }
 
-export function World({ selectedId, onSelectExhibit }: WorldProps) {
+export function World({
+  terrainVoxels,
+  portfolioEntries,
+  draftExhibits,
+  selectedId,
+  onSelectEntry,
+  buildMode = false,
+  terrainEraseHoverKey,
+  draftEraseHoverId,
+}: WorldProps) {
   return (
     <>
-      <color attach="background" args={['#0c0e12']} />
-      <ambientLight intensity={0.5} />
+      <color attach="background" args={[BG]} />
+      <fog attach="fog" args={[BG, 34, 72]} />
+      <Environment preset="city" environmentIntensity={0.22} />
+      <ambientLight intensity={0.48} />
       <directionalLight
         position={[12, 20, 10]}
-        intensity={1.25}
+        intensity={1.2}
         castShadow
         shadow-mapSize={[2048, 2048]}
-        shadow-camera-far={40}
-        shadow-camera-left={-22}
-        shadow-camera-right={22}
-        shadow-camera-top={22}
-        shadow-camera-bottom={-22}
+        shadow-camera-far={56}
+        shadow-camera-left={-WORLD_HALF}
+        shadow-camera-right={WORLD_HALF}
+        shadow-camera-top={WORLD_HALF}
+        shadow-camera-bottom={-WORLD_HALF}
+        shadow-bias={-0.00045}
+        shadow-normalBias={0.045}
       />
-      <mesh rotation={[-Math.PI / 2, 0, 0]} receiveShadow position={[0, 0, 0]}>
-        <planeGeometry args={[48, 48]} />
-        <meshStandardMaterial color="#141820" metalness={0.05} roughness={0.9} />
-      </mesh>
-      <Grid
-        args={[48, 48]}
-        position={[0, 0.002, 0]}
-        rotation={[-Math.PI / 2, 0, 0]}
-        cellSize={1}
-        cellThickness={0.55}
-        cellColor="#2a3240"
-        sectionSize={5}
-        sectionThickness={0.9}
-        sectionColor="#3d4a5c"
-        fadeDistance={52}
-        fadeStrength={1}
-        infiniteGrid={false}
-      />
+      {terrainVoxels.map((voxel) => {
+        const k = `${voxel.position[0]},${voxel.position[1]},${voxel.position[2]}`
+        return (
+          <TerrainBlock
+            key={k}
+            voxel={voxel}
+            eraseHighlighted={terrainEraseHoverKey === k}
+          />
+        )
+      })}
       {portfolioEntries.map((entry) => (
         <Exhibit
           key={entry.id}
           entry={entry}
           highlighted={selectedId === entry.id}
-          onSelect={onSelectExhibit}
+          onSelect={onSelectEntry}
+          suppressSelection={buildMode}
+        />
+      ))}
+      {draftExhibits.map((entry) => (
+        <Exhibit
+          key={entry.id}
+          entry={entry}
+          highlighted={selectedId === entry.id}
+          onSelect={onSelectEntry}
+          draftExhibitId={entry.id}
+          eraseHighlighted={draftEraseHoverId === entry.id}
+          suppressSelection={buildMode}
         />
       ))}
     </>

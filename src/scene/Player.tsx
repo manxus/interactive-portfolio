@@ -1,8 +1,7 @@
-import { useRef } from 'react'
+import { useRef, type MutableRefObject } from 'react'
+import { RoundedBox } from '@react-three/drei'
 import { useFrame } from '@react-three/fiber'
-import type { Group } from 'three'
-import type { MutableRefObject } from 'react'
-import type { Quaternion, Vector3 } from 'three'
+import type { Group, Quaternion, Vector3 } from 'three'
 
 type PlayerProps = {
   positionRef: MutableRefObject<Vector3>
@@ -24,8 +23,7 @@ export function Player({ positionRef, quaternionRef }: PlayerProps) {
 
   return (
     <group ref={groupRef}>
-      <mesh castShadow receiveShadow>
-        <boxGeometry args={[1, 1, 1]} />
+      <RoundedBox args={[1, 1, 1]} radius={0.06} smoothness={4} castShadow receiveShadow>
         <meshStandardMaterial
           color={COLOR}
           emissive={EMISSIVE}
@@ -33,7 +31,7 @@ export function Player({ positionRef, quaternionRef }: PlayerProps) {
           metalness={0.15}
           roughness={0.4}
         />
-      </mesh>
+      </RoundedBox>
     </group>
   )
 }

@@ -7,6 +7,7 @@ import {
   canRollLandAt,
   getClimbTargetIfValid,
   getClimbUpOneStepIfValid,
+  getSupportSurfaceWorld,
   getTerrainTopWorld,
   isAdjacentClimbRest,
   PLAYER_HALF,
@@ -21,7 +22,9 @@ import {
 } from './rollMath'
 import type { RollKey } from './useRollKeyQueue'
 import {
+  clampBesideWallHingePos,
   climbEndQuaternion,
+  climbSameCellXZ,
   createClimbPath,
   evalHingeClimbFrame,
   evalMantleFrame,
@@ -71,6 +74,8 @@ type PlayerRollProps = {
   controlsRef: RefObject<OrbitControlsImpl | null>
   keyQueue: MutableRefObject<RollKey[]>
   jumpPendingRef: MutableRefObject<boolean>
+  /** When true, skip movement/gravity so the free camera can drive the view. */
+  buildMode?: boolean
 }
 
 export function PlayerRoll({
@@ -79,6 +84,7 @@ export function PlayerRoll({
   controlsRef,
   keyQueue,
   jumpPendingRef,
+  buildMode = false,
 }: PlayerRollProps) {
   const { camera } = useThree()
   const rollingRef = useRef<RollingState | null>(null)
@@ -100,6 +106,8 @@ export function PlayerRoll({
   const mantleAxisScratch = useRef(new Vector3())
 
   useFrame((_, delta) => {
+    if (buildMode) return
+
     const dt = Math.min(Math.max(0, delta), MAX_FRAME_DELTA)
     const pos = playerPositionRef.current
     const quat = playerQuaternionRef.current
@@ -122,6 +130,9 @@ export function PlayerRoll({
           qPart.current,
           hingeOffsetScratch.current,
         )
+        if (climbSameCellXZ(climb.from, climb.to)) {
+          clampBesideWallHingePos(pos, climb.from, climb.climbDir)
+        }
       } else {
         evalMantleFrame(path.curve, t, pos)
         evalMantleSeamRollRotation(
@@ -139,6 +150,12 @@ export function PlayerRoll({
       if (t >= 1) {
         pos.copy(climb.to)
         snapPlayerToGridXZ(pos)
+        const landedFeet = pos.y - PLAYER_HALF
+        const sup = getSupportSurfaceWorld(pos.x, pos.z, landedFeet)
+        // Snap Y only when landing on real voxel tops in this column (not void).
+        if (Number.isFinite(sup) && Math.abs(sup - landedFeet) <= 0.18) {
+          pos.y = sup + PLAYER_HALF
+        }
         quat.copy(climb.q1)
         climbingRef.current = null
         vyRef.current = 0
@@ -181,8 +198,8 @@ export function PlayerRoll({
     }
 
     snapPlayerToGridXZ(pos)
-    let topo = getTerrainTopWorld(pos.x, pos.z)
     let feet = pos.y - PLAYER_HALF
+    let topo = getSupportSurfaceWorld(pos.x, pos.z, feet)
     const climbRest = isAdjacentClimbRest(pos)
     const onSupport =
       !edgeDropPendingRef.current &&
@@ -207,8 +224,8 @@ export function PlayerRoll({
       pos.y += vyRef.current * dt
     }
 
-    topo = getTerrainTopWorld(pos.x, pos.z)
     feet = pos.y - PLAYER_HALF
+    topo = getSupportSurfaceWorld(pos.x, pos.z, feet)
     if (feet <= topo && vyRef.current < 0) {
       pos.y = topo + PLAYER_HALF
       vyRef.current = 0
@@ -216,16 +233,17 @@ export function PlayerRoll({
     }
 
     feet = pos.y - PLAYER_HALF
-    topo = getTerrainTopWorld(pos.x, pos.z)
+    topo = getSupportSurfaceWorld(pos.x, pos.z, feet)
     const climbRestStable = isAdjacentClimbRest(pos)
     if (vyRef.current === 0 && Math.abs(feet - topo) < 0.1 && !climbRestStable) {
       snapPlayerToGridXZ(pos)
-      pos.y = getTerrainTopWorld(pos.x, pos.z) + PLAYER_HALF
+      const standFeet = pos.y - PLAYER_HALF
+      pos.y = getSupportSurfaceWorld(pos.x, pos.z, standFeet) + PLAYER_HALF
       edgeDropPendingRef.current = false
     }
 
     feet = pos.y - PLAYER_HALF
-    topo = getTerrainTopWorld(pos.x, pos.z)
+    topo = getSupportSurfaceWorld(pos.x, pos.z, feet)
     const groundedForActions =
       !edgeDropPendingRef.current &&
       vyRef.current === 0 &&
@@ -308,9 +326,10 @@ export function PlayerRoll({
           quaternionAfterRoll(axisScratch.current, quat, qEnd.current)
 
           const fromFeet = pos.y - PLAYER_HALF
-          const destTopo = getTerrainTopWorld(
+          const destTopo = getSupportSurfaceWorld(
             endScratch.current.x,
             endScratch.current.z,
+            fromFeet,
           )
           const freeFallAfterRoll = destTopo < fromFeet - 1e-3
 
