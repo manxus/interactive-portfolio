@@ -11,7 +11,7 @@ import {
   Vector3,
 } from 'three'
 import type { PortfolioEntry } from '../data/portfolio'
-import type { TerrainVoxel } from '../data/terrain'
+import type { LightBlockConfig, TerrainVoxel } from '../data/terrain'
 import {
   cellsForBrush,
   type EditorBrushState,
@@ -20,7 +20,7 @@ import { WORLD_HALF } from './collision'
 
 export type EditorTool = 'place' | 'erase' | 'paint'
 
-export type EditorPlaceKind = 'terrain' | 'project'
+export type EditorPlaceKind = 'terrain' | 'project' | 'light'
 
 export type EraseHoverPayload = {
   terrainKey: string | null
@@ -43,6 +43,8 @@ type TerrainEditorProps = {
   onDraftExhibitsChange: (next: PortfolioEntry[]) => void
   staticExhibitKeys: Set<string>
   onEraseHover?: (h: EraseHoverPayload) => void
+  /** Defaults for newly placed light voxels; paint reapplies to existing lights. */
+  lightBlockConfig: LightBlockConfig
 }
 
 const ndc = new Vector2()
@@ -164,12 +166,14 @@ export function TerrainEditor({
   onDraftExhibitsChange,
   staticExhibitKeys,
   onEraseHover,
+  lightBlockConfig,
 }: TerrainEditorProps) {
   const { gl, camera, scene } = useThree()
   const terrainRef = useRef(terrainVoxels)
   const draftRef = useRef(draftExhibits)
   const staticKeysRef = useRef(staticExhibitKeys)
   const colorRef = useRef(color)
+  const lightBlockConfigRef = useRef(lightBlockConfig)
   const hoverEraseRef = useRef(false)
   const hoverPlaceRef = useRef(false)
   const ndcActiveRef = useRef(false)
@@ -207,6 +211,10 @@ export function TerrainEditor({
   useLayoutEffect(() => {
     colorRef.current = color
   }, [color])
+
+  useLayoutEffect(() => {
+    lightBlockConfigRef.current = lightBlockConfig
+  }, [lightBlockConfig])
 
   useLayoutEffect(() => {
     brushRef.current = brush
@@ -418,12 +426,15 @@ export function TerrainEditor({
           scene,
         )
         if (pick.terrainKey) {
+          const lc = lightBlockConfigRef.current
           onTerrainChange(
-            currentTerrain.map((v) =>
-              centerKey(...v.position) === pick.terrainKey
-                ? { ...v, color }
-                : v,
-            ),
+            currentTerrain.map((v) => {
+              if (centerKey(...v.position) !== pick.terrainKey) return v
+              if (v.kind === 'light') {
+                return { ...v, color, light: { ...lc } }
+              }
+              return { ...v, color }
+            }),
           )
         }
         return
@@ -476,9 +487,19 @@ export function TerrainEditor({
       const byKey = new Map(
         currentTerrain.map((v) => [centerKey(...v.position), v] as const),
       )
+      const lc = lightBlockConfigRef.current
       for (const [x, y, z] of free) {
         const k = centerKey(x, y, z)
-        byKey.set(k, { position: [x, y, z], color })
+        if (placeKind === 'light') {
+          byKey.set(k, {
+            position: [x, y, z],
+            color,
+            kind: 'light',
+            light: { ...lc },
+          })
+        } else {
+          byKey.set(k, { position: [x, y, z], color })
+        }
       }
       onTerrainChange([...byKey.values()])
     }
@@ -496,6 +517,7 @@ export function TerrainEditor({
     tool,
     color,
     placeKind,
+    lightBlockConfig,
     onTerrainChange,
     onDraftExhibitsChange,
     camera,

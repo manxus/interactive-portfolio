@@ -20,10 +20,44 @@ function isNum3(t: unknown): t is [number, number, number] {
   )
 }
 
+const LIGHT_BLOCK_KEYS = [
+  'distance',
+  'decay',
+  'intensity',
+  'intensityPulse',
+  'pulseSpeed',
+  'coreBrightness',
+  'corePulse',
+  'coreRadius',
+  'shellGlow',
+  'shellGlowPulse',
+  'coreScaleBase',
+  'coreScalePulse',
+] as const
+
+function isLightBlockPartial(x: unknown): boolean {
+  if (x === undefined) return true
+  if (typeof x !== 'object' || x === null) return false
+  const o = x as Record<string, unknown>
+  for (const k of LIGHT_BLOCK_KEYS) {
+    if (o[k] !== undefined && typeof o[k] !== 'number') return false
+  }
+  return true
+}
+
 function isTerrainVoxel(x: unknown): x is TerrainVoxel {
   if (typeof x !== 'object' || x === null) return false
   const o = x as Record<string, unknown>
-  return typeof o.color === 'string' && isNum3(o.position)
+  if (typeof o.color !== 'string' || !isNum3(o.position)) return false
+  if (
+    o.kind !== undefined &&
+    o.kind !== 'solid' &&
+    o.kind !== 'light'
+  ) {
+    return false
+  }
+  if (o.light !== undefined && !isLightBlockPartial(o.light)) return false
+  return true
 }
 
 function isPortfolioLink(x: unknown): x is PortfolioLink {

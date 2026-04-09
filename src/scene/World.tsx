@@ -1,11 +1,14 @@
 import { Environment } from '@react-three/drei'
+import {
+  defaultWorldLighting,
+  type WorldLightingSettings,
+} from '../data/worldLighting'
 import type { PortfolioEntry } from '../data/portfolio'
 import type { TerrainVoxel } from '../data/terrain'
 import { Exhibit } from './Exhibit'
+import { IlluminationBlock } from './IlluminationBlock'
 import { TerrainBlock } from './TerrainBlock'
 import { WORLD_HALF } from './collision'
-
-const BG = '#0c0e12'
 
 type WorldProps = {
   terrainVoxels: TerrainVoxel[]
@@ -18,6 +21,8 @@ type WorldProps = {
   /** Voxel key `x,y,z` for erase-tool hover highlight in dev editor. */
   terrainEraseHoverKey?: string | null
   draftEraseHoverId?: string | null
+  /** Scene lights / fog / background; defaults match original shipped look. */
+  lighting?: WorldLightingSettings
 }
 
 export function World({
@@ -29,16 +34,22 @@ export function World({
   buildMode = false,
   terrainEraseHoverKey,
   draftEraseHoverId,
+  lighting: lightingProp,
 }: WorldProps) {
+  const L = lightingProp ?? defaultWorldLighting
   return (
     <>
-      <color attach="background" args={[BG]} />
-      <fog attach="fog" args={[BG, 34, 72]} />
-      <Environment preset="city" environmentIntensity={0.22} />
-      <ambientLight intensity={0.48} />
+      <color attach="background" args={[L.backgroundColor]} />
+      <fog attach="fog" args={[L.fogColor, L.fogNear, L.fogFar]} />
+      <Environment
+        preset="city"
+        environmentIntensity={L.environmentIntensity}
+      />
+      <ambientLight color={L.ambientColor} intensity={L.ambientIntensity} />
       <directionalLight
         position={[12, 20, 10]}
-        intensity={1.2}
+        color={L.directionalColor}
+        intensity={L.directionalIntensity}
         castShadow
         shadow-mapSize={[2048, 2048]}
         shadow-camera-far={56}
@@ -51,12 +62,11 @@ export function World({
       />
       {terrainVoxels.map((voxel) => {
         const k = `${voxel.position[0]},${voxel.position[1]},${voxel.position[2]}`
-        return (
-          <TerrainBlock
-            key={k}
-            voxel={voxel}
-            eraseHighlighted={terrainEraseHoverKey === k}
-          />
+        const hi = terrainEraseHoverKey === k
+        return voxel.kind === 'light' ? (
+          <IlluminationBlock key={k} voxel={voxel} eraseHighlighted={hi} />
+        ) : (
+          <TerrainBlock key={k} voxel={voxel} eraseHighlighted={hi} />
         )
       })}
       {portfolioEntries.map((entry) => (

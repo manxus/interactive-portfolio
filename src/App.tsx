@@ -9,7 +9,17 @@ import {
   portfolioEntries,
   type PortfolioEntry,
 } from './data/portfolio'
-import type { TerrainVoxel } from './data/terrain'
+import {
+  defaultWorldLighting,
+  type WorldLightingSettings,
+} from './data/worldLighting'
+import {
+  defaultLightBlockConfig,
+  type LightBlockConfig,
+  type TerrainVoxel,
+} from './data/terrain'
+import { loadLightBlockDefaults, saveLightBlockDefaults } from './editor/lightBlockConfigStorage'
+import { loadWorldLighting, saveWorldLighting } from './editor/worldLightingStorage'
 import { PortfolioScene } from './scene/PortfolioScene'
 import type { EditorPlaceKind, EditorTool } from './scene/TerrainEditor'
 import './App.css'
@@ -37,6 +47,16 @@ function initialDevEditorState(): {
   return devEditorBootstrap
 }
 
+function initialWorldLighting(): WorldLightingSettings {
+  if (!isDev) return defaultWorldLighting
+  return loadWorldLighting() ?? defaultWorldLighting
+}
+
+function initialLightBlockConfig(): LightBlockConfig {
+  if (!isDev) return defaultLightBlockConfig
+  return loadLightBlockDefaults() ?? defaultLightBlockConfig
+}
+
 function App() {
   const [controlsOpen, setControlsOpen] = useState(true)
   const [selectedId, setSelectedId] = useState<string | null>(null)
@@ -54,6 +74,12 @@ function App() {
   const [editorBrush, setEditorBrush] = useState<EditorBrushState>(
     defaultBrushState,
   )
+  const [worldLighting, setWorldLighting] = useState<WorldLightingSettings>(
+    initialWorldLighting,
+  )
+  const [lightBlockConfig, setLightBlockConfig] = useState<LightBlockConfig>(
+    initialLightBlockConfig,
+  )
 
   const sceneTerrain = isDev ? terrainDraft : committedTerrainVoxels
 
@@ -67,6 +93,16 @@ function App() {
     if (!isDev) return
     saveBuildDraft(terrainDraft, draftExhibits)
   }, [terrainDraft, draftExhibits])
+
+  useEffect(() => {
+    if (!isDev) return
+    saveWorldLighting(worldLighting)
+  }, [worldLighting])
+
+  useEffect(() => {
+    if (!isDev) return
+    saveLightBlockDefaults(lightBlockConfig)
+  }, [lightBlockConfig])
 
   const selectedEntry = useMemo(() => {
     if (!selectedId) return null
@@ -100,6 +136,8 @@ function App() {
             editorColor={editorColor}
             editorBrush={editorBrush}
             onTerrainChange={onTerrainChange}
+            worldLighting={worldLighting}
+            lightBlockConfig={lightBlockConfig}
           />
         </Canvas>
       </div>
@@ -159,6 +197,10 @@ function App() {
               brush={editorBrush}
               onBrushChange={setEditorBrush}
               terrainDraft={terrainDraft}
+              worldLighting={worldLighting}
+              onWorldLightingChange={setWorldLighting}
+              lightBlockConfig={lightBlockConfig}
+              onLightBlockConfigChange={setLightBlockConfig}
             />
           ) : null}
         </header>

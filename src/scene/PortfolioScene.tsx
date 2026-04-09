@@ -2,6 +2,8 @@ import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react
 import { OrbitControls } from '@react-three/drei'
 import { MOUSE, Quaternion, Vector3 } from 'three'
 import type { OrbitControls as OrbitControlsImpl } from 'three-stdlib'
+import type { LightBlockConfig } from '../data/terrain'
+import type { WorldLightingSettings } from '../data/worldLighting'
 import type { PortfolioEntry } from '../data/portfolio'
 import type { TerrainVoxel } from '../data/terrain'
 import { findSpawnCenter, setWorldCollision } from './collision'
@@ -32,6 +34,8 @@ type PortfolioSceneProps = {
   editorColor: string
   editorBrush: EditorBrushState
   onTerrainChange: (next: TerrainVoxel[]) => void
+  worldLighting: WorldLightingSettings
+  lightBlockConfig: LightBlockConfig
 }
 
 export function PortfolioScene({
@@ -48,6 +52,8 @@ export function PortfolioScene({
   editorColor,
   editorBrush,
   onTerrainChange,
+  worldLighting,
+  lightBlockConfig,
 }: PortfolioSceneProps) {
   const dev = import.meta.env.DEV
   const editorCam = dev && buildMode
@@ -115,6 +121,7 @@ export function PortfolioScene({
         selectedId={selectedId}
         onSelectEntry={onSelectEntry}
         buildMode={buildMode}
+        lighting={worldLighting}
         terrainEraseHoverKey={
           dev && buildMode && editorTool === 'erase'
             ? terrainEraseHoverKey
@@ -161,6 +168,7 @@ export function PortfolioScene({
           onDraftExhibitsChange={onDraftExhibitsChange}
           staticExhibitKeys={staticExhibitKeys}
           onEraseHover={onEraseHover}
+          lightBlockConfig={lightBlockConfig}
         />
       ) : null}
       <ScenePostFX />

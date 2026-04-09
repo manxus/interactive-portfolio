@@ -3,6 +3,16 @@
     {
       "position": [0, 0.5, 0],
       "color": "#3d4a5c"
+    },
+    {
+      "position": [2, 0.5, 0],
+      "color": "#8ab4ff",
+      "kind": "light",
+      "light": {
+        "distance": 16,
+        "intensity": 2.6,
+        "intensityPulse": 0.4
+      }
     }
   ]
 }
