@@ -1,6 +1,8 @@
 import { Canvas } from '@react-three/fiber'
-import { useCallback, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import { BuildMenu } from './editor/BuildMenu'
+import { defaultBrushState, type EditorBrushState } from './editor/brushCells'
+import { loadBuildDraft, saveBuildDraft } from './editor/buildDraftStorage'
 import {
   committedTerrainVoxels,
   exhibitOccupiedCenterKeys,
@@ -14,18 +16,44 @@ import './App.css'
 
 const isDev = import.meta.env.DEV
 
+let devEditorBootstrap:
+  | { terrain: TerrainVoxel[]; exhibits: PortfolioEntry[] }
+  | undefined
+
+function initialDevEditorState(): {
+  terrain: TerrainVoxel[]
+  exhibits: PortfolioEntry[]
+} {
+  if (!isDev) return { terrain: [], exhibits: [] }
+  if (!devEditorBootstrap) {
+    const saved = loadBuildDraft()
+    devEditorBootstrap = saved
+      ? { terrain: saved.voxels, exhibits: saved.exhibits }
+      : {
+          terrain: structuredClone(committedTerrainVoxels),
+          exhibits: [],
+        }
+  }
+  return devEditorBootstrap
+}
+
 function App() {
   const [controlsOpen, setControlsOpen] = useState(true)
   const [selectedId, setSelectedId] = useState<string | null>(null)
   const [terrainDraft, setTerrainDraft] = useState<TerrainVoxel[]>(() =>
-    isDev ? structuredClone(committedTerrainVoxels) : [],
+    isDev ? initialDevEditorState().terrain : [],
   )
-  const [draftExhibits, setDraftExhibits] = useState<PortfolioEntry[]>([])
+  const [draftExhibits, setDraftExhibits] = useState<PortfolioEntry[]>(() =>
+    isDev ? initialDevEditorState().exhibits : [],
+  )
   const [buildMode, setBuildMode] = useState(false)
   const [editorTool, setEditorTool] = useState<EditorTool>('place')
   const [editorPlaceKind, setEditorPlaceKind] =
     useState<EditorPlaceKind>('terrain')
   const [editorColor, setEditorColor] = useState('#3d4a5c')
+  const [editorBrush, setEditorBrush] = useState<EditorBrushState>(
+    defaultBrushState,
+  )
 
   const sceneTerrain = isDev ? terrainDraft : committedTerrainVoxels
 
@@ -34,6 +62,11 @@ function App() {
   const onTerrainChange = useCallback((next: TerrainVoxel[]) => {
     if (isDev) setTerrainDraft(next)
   }, [])
+
+  useEffect(() => {
+    if (!isDev) return
+    saveBuildDraft(terrainDraft, draftExhibits)
+  }, [terrainDraft, draftExhibits])
 
   const selectedEntry = useMemo(() => {
     if (!selectedId) return null
@@ -65,6 +98,7 @@ function App() {
             editorTool={editorTool}
             editorPlaceKind={editorPlaceKind}
             editorColor={editorColor}
+            editorBrush={editorBrush}
             onTerrainChange={onTerrainChange}
           />
         </Canvas>
@@ -122,6 +156,8 @@ function App() {
               onPlaceKindChange={setEditorPlaceKind}
               color={editorColor}
               onColorChange={setEditorColor}
+              brush={editorBrush}
+              onBrushChange={setEditorBrush}
               terrainDraft={terrainDraft}
             />
           ) : null}

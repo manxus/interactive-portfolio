@@ -1,5 +1,7 @@
 import type { TerrainVoxel } from '../data/terrain'
 import type { EditorPlaceKind, EditorTool } from '../scene/TerrainEditor'
+import type { EditorBrushState, LineAxis } from './brushCells'
+import { MAX_BRUSH_EXTENT } from './brushCells'
 
 type BuildMenuProps = {
   buildMode: boolean
@@ -10,6 +12,8 @@ type BuildMenuProps = {
   onPlaceKindChange: (k: EditorPlaceKind) => void
   color: string
   onColorChange: (c: string) => void
+  brush: EditorBrushState
+  onBrushChange: (next: EditorBrushState) => void
   terrainDraft: TerrainVoxel[]
 }
 
@@ -22,8 +26,37 @@ export function BuildMenu({
   onPlaceKindChange,
   color,
   onColorChange,
+  brush,
+  onBrushChange,
   terrainDraft,
 }: BuildMenuProps) {
+  const patchBrush = (partial: Partial<EditorBrushState>) => {
+    onBrushChange({ ...brush, ...partial })
+  }
+
+  const intField = (
+    label: string,
+    value: number,
+    setValue: (n: number) => void,
+    min: number,
+    max: number,
+  ) => (
+    <label className="build-menu-row build-menu-brush-field">
+      <span>{label}</span>
+      <input
+        type="number"
+        min={min}
+        max={max}
+        value={value}
+        onChange={(e) => {
+          const v = Number.parseInt(e.target.value, 10)
+          const n = Number.isFinite(v) ? v : min
+          setValue(Math.min(max, Math.max(min, n)))
+        }}
+        disabled={!buildMode}
+      />
+    </label>
+  )
   const exportJson = () => {
     const text = JSON.stringify({ voxels: terrainDraft }, null, 2)
     const blob = new Blob([text], { type: 'application/json' })
@@ -94,6 +127,105 @@ export function BuildMenu({
           </button>
         </div>
       ) : null}
+      {tool === 'place' ? (
+        <>
+          <div className="build-menu-row build-menu-tools">
+            <span>Brush</span>
+            {(['area', 'line', 'circle', 'pillar'] as const).map((s) => (
+              <button
+                key={s}
+                type="button"
+                className={
+                  brush.shape === s ? 'build-tool active' : 'build-tool'
+                }
+                onClick={() => patchBrush({ shape: s })}
+                disabled={!buildMode}
+              >
+                {s}
+              </button>
+            ))}
+          </div>
+          {brush.shape === 'area' ? (
+            <div className="build-menu-brush-grid">
+              {intField(
+                'Width (X)',
+                brush.areaWidth,
+                (n) => patchBrush({ areaWidth: n }),
+                1,
+                MAX_BRUSH_EXTENT,
+              )}
+              {intField(
+                'Height (Y)',
+                brush.areaHeight,
+                (n) => patchBrush({ areaHeight: n }),
+                1,
+                MAX_BRUSH_EXTENT,
+              )}
+              {intField(
+                'Depth (Z)',
+                brush.areaDepth,
+                (n) => patchBrush({ areaDepth: n }),
+                1,
+                MAX_BRUSH_EXTENT,
+              )}
+            </div>
+          ) : null}
+          {brush.shape === 'line' ? (
+            <>
+              <div className="build-menu-row build-menu-tools">
+                <span>Axis</span>
+                {(['x', 'y', 'z'] as const).map((axis) => (
+                  <button
+                    key={axis}
+                    type="button"
+                    className={
+                      brush.lineAxis === axis ? 'build-tool active' : 'build-tool'
+                    }
+                    onClick={() => patchBrush({ lineAxis: axis as LineAxis })}
+                    disabled={!buildMode}
+                  >
+                    {axis}
+                  </button>
+                ))}
+              </div>
+              {intField(
+                'Length',
+                brush.lineLength,
+                (n) => patchBrush({ lineLength: n }),
+                1,
+                MAX_BRUSH_EXTENT * 2,
+              )}
+            </>
+          ) : null}
+          {brush.shape === 'circle'
+            ? intField(
+                'Radius',
+                brush.circleRadius,
+                (n) => patchBrush({ circleRadius: n }),
+                0,
+                MAX_BRUSH_EXTENT,
+              )
+            : null}
+          {brush.shape === 'pillar' ? (
+            <div className="build-menu-brush-grid">
+              {intField(
+                'Radius (XZ)',
+                brush.pillarRadius,
+                (n) => patchBrush({ pillarRadius: n }),
+                0,
+                MAX_BRUSH_EXTENT,
+              )}
+              {intField(
+                'Height',
+                brush.pillarHeight,
+                (n) => patchBrush({ pillarHeight: n }),
+                1,
+                MAX_BRUSH_EXTENT,
+              )}
+            </div>
+          ) : null}
+        </>
+      ) : null}
       <label className="build-menu-row">
         Color (place / paint){' '}
         <input
@@ -117,9 +249,14 @@ export function BuildMenu({
         raycast a terrain or project block — the new cell is the face-adjacent
         neighbor (no floating placements). Needs at least one block in the
         level to extend from (e.g. committed terrain). Vertical band about y
-        −24.5–24.5 (half-integer voxel centers).
+        −24.5–24.5 (half-integer voxel centers). <strong>Brush:</strong> area
+        fills a box from the anchor; line runs along an axis; circle is a flat
+        disk (anchor = center); pillar stacks a disk upward (radius 0 = one
+        column).
         Dev-only <strong>project</strong> blocks → copy into{' '}
         <code>portfolio.ts</code> for production. Export terrain JSON and commit.
+        Your terrain and placed project blocks are auto-saved in{' '}
+        <code>localStorage</code> for this site so refreshes keep the draft.
       </p>
     </div>
   )

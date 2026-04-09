@@ -11,6 +11,7 @@ import { Player } from './Player'
 import { useRollKeyQueue } from './useRollKeyQueue'
 import { useJumpPending } from './useJumpPending'
 import { ScenePostFX } from './ScenePostFX'
+import type { EditorBrushState } from '../editor/brushCells'
 import {
   TerrainEditor,
   type EditorPlaceKind,
@@ -29,6 +30,7 @@ type PortfolioSceneProps = {
   editorTool: EditorTool
   editorPlaceKind: EditorPlaceKind
   editorColor: string
+  editorBrush: EditorBrushState
   onTerrainChange: (next: TerrainVoxel[]) => void
 }
 
@@ -44,6 +46,7 @@ export function PortfolioScene({
   editorTool,
   editorPlaceKind,
   editorColor,
+  editorBrush,
   onTerrainChange,
 }: PortfolioSceneProps) {
   const dev = import.meta.env.DEV
@@ -151,6 +154,7 @@ export function PortfolioScene({
           tool={editorTool}
           color={editorColor}
           placeKind={editorPlaceKind}
+          brush={editorBrush}
           terrainVoxels={terrainVoxels}
           onTerrainChange={onTerrainChange}
           draftExhibits={draftExhibits}

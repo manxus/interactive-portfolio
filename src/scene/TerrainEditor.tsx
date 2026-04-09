@@ -1,16 +1,21 @@
-import { useEffect, useLayoutEffect, useRef } from 'react'
+import { useEffect, useLayoutEffect, useMemo, useRef } from 'react'
 import { useFrame, useThree } from '@react-three/fiber'
-import type {
-  Camera,
-  Group,
-  Intersection,
+import type { Camera, Group, Intersection, Object3D, Scene } from 'three'
+import {
+  BoxGeometry,
+  Color,
+  Matrix4,
   MeshBasicMaterial,
-  Object3D,
-  Scene,
+  Raycaster,
+  Vector2,
+  Vector3,
 } from 'three'
-import { Color, Raycaster, Vector2, Vector3 } from 'three'
 import type { PortfolioEntry } from '../data/portfolio'
 import type { TerrainVoxel } from '../data/terrain'
+import {
+  cellsForBrush,
+  type EditorBrushState,
+} from '../editor/brushCells'
 import { WORLD_HALF } from './collision'
 
 export type EditorTool = 'place' | 'erase' | 'paint'
@@ -22,11 +27,16 @@ export type EraseHoverPayload = {
   draftExhibitId: string | null
 }
 
+const PREVIEW_INSTANCE_CAP = 4096
+const previewBoxGeo = new BoxGeometry(1, 1, 1)
+const scratchMat4 = new Matrix4()
+
 type TerrainEditorProps = {
   enabled: boolean
   tool: EditorTool
   color: string
   placeKind: EditorPlaceKind
+  brush: EditorBrushState
   terrainVoxels: TerrainVoxel[]
   onTerrainChange: (next: TerrainVoxel[]) => void
   draftExhibits: PortfolioEntry[]
@@ -147,6 +157,7 @@ export function TerrainEditor({
   tool,
   color,
   placeKind,
+  brush,
   terrainVoxels,
   onTerrainChange,
   draftExhibits,
@@ -165,7 +176,17 @@ export function TerrainEditor({
   const lastEraseSigRef = useRef<string>('|')
   const onEraseHoverRef = useRef(onEraseHover)
   const previewGroupRef = useRef<Group>(null)
-  const previewMatRef = useRef<MeshBasicMaterial>(null)
+  const previewMaterial = useMemo(
+    () =>
+      new MeshBasicMaterial({
+        transparent: true,
+        opacity: 0.28,
+        depthWrite: false,
+      }),
+    [],
+  )
+  const previewInstRef = useRef<import('three').InstancedMesh>(null)
+  const brushRef = useRef(brush)
 
   useLayoutEffect(() => {
     onEraseHoverRef.current = onEraseHover
@@ -188,6 +209,10 @@ export function TerrainEditor({
   }, [color])
 
   useLayoutEffect(() => {
+    brushRef.current = brush
+  }, [brush])
+
+  useLayoutEffect(() => {
     hoverEraseRef.current = enabled && tool === 'erase'
     hoverPlaceRef.current = enabled && tool === 'place'
   }, [enabled, tool])
@@ -202,7 +227,14 @@ export function TerrainEditor({
 
   useFrame(() => {
     const previewGroup = previewGroupRef.current
-    const previewMat = previewMatRef.current
+    const hidePreview = () => {
+      if (previewGroup) previewGroup.visible = false
+      const im = previewInstRef.current
+      if (im) {
+        im.count = 0
+        im.instanceMatrix.needsUpdate = true
+      }
+    }
 
     if (hoverEraseRef.current) {
       if (!ndcActiveRef.current) {
@@ -247,10 +279,10 @@ export function TerrainEditor({
       }
     }
 
-    if (!previewGroup || !previewMat) return
+    if (!previewGroup) return
 
     if (!hoverPlaceRef.current || !ndcActiveRef.current) {
-      previewGroup.visible = false
+      hidePreview()
       return
     }
 
@@ -266,34 +298,52 @@ export function TerrainEditor({
       }
     }
     if (!placeOk) {
-      previewGroup.visible = false
+      hidePreview()
       return
     }
 
     const currentTerrain = terrainRef.current
     const currentDrafts = draftRef.current
     const sk = staticKeysRef.current
-    const k = centerKey(
+    const b = brushRef.current
+    const rawCells = cellsForBrush(
       scratchNeighbor.x,
       scratchNeighbor.y,
       scratchNeighbor.z,
+      b.shape,
+      b,
     )
-    if (sk.has(k)) {
-      previewGroup.visible = false
-      return
-    }
-    if (currentTerrain.some((v) => centerKey(...v.position) === k)) {
-      previewGroup.visible = false
-      return
-    }
-    if (currentDrafts.some((e) => centerKey(...e.position) === k)) {
-      previewGroup.visible = false
+    const placeable = rawCells.filter(([x, y, z]) => {
+      const kk = centerKey(x, y, z)
+      if (sk.has(kk)) return false
+      if (currentTerrain.some((v) => centerKey(...v.position) === kk))
+        return false
+      if (currentDrafts.some((e) => centerKey(...e.position) === kk))
+        return false
+      return true
+    })
+    const inst = previewInstRef.current
+    if (!inst) {
+      hidePreview()
       return
     }
 
     previewColor.set(colorRef.current)
-    previewMat.color.copy(previewColor)
-    previewGroup.position.copy(scratchNeighbor)
+    previewMaterial.color.copy(previewColor)
+    previewGroup.position.set(0, 0, 0)
+
+    const n = Math.min(placeable.length, PREVIEW_INSTANCE_CAP)
+    if (n === 0) {
+      hidePreview()
+      return
+    }
+    inst.count = n
+    for (let i = 0; i < n; i++) {
+      const [x, y, z] = placeable[i]!
+      scratchMat4.makeTranslation(x, y, z)
+      inst.setMatrixAt(i, scratchMat4)
+    }
+    inst.instanceMatrix.needsUpdate = true
     previewGroup.visible = true
   })
 
@@ -405,27 +455,32 @@ export function TerrainEditor({
 
       const cell = placeTargetFromClient(ev.clientX, ev.clientY)
       if (!cell) return
-      const [sx, sy, sz] = cell
-      if (cellOccupied(sx, sy, sz, currentTerrain, currentDrafts, sk)) return
+      const [ax, ay, az] = cell
+      const br = brushRef.current
+      const targets = cellsForBrush(ax, ay, az, br.shape, br)
+      if (targets.length === 0) return
+
+      const free = targets.filter(
+        ([x, y, z]) => !cellOccupied(x, y, z, currentTerrain, currentDrafts, sk),
+      )
+      if (free.length === 0) return
 
       if (placeKind === 'project') {
-        onDraftExhibitsChange([
-          ...currentDrafts,
-          newDraftExhibit([sx, sy, sz], color),
-        ])
+        const additions = free.map(([x, y, z]) =>
+          newDraftExhibit([x, y, z], color),
+        )
+        onDraftExhibitsChange([...currentDrafts, ...additions])
         return
       }
 
-      const idx = currentTerrain.findIndex(
-        (v) => v.position[0] === sx && v.position[1] === sy && v.position[2] === sz,
+      const byKey = new Map(
+        currentTerrain.map((v) => [centerKey(...v.position), v] as const),
       )
-      if (idx >= 0) {
-        const next = currentTerrain.slice()
-        next[idx] = { position: [sx, sy, sz], color }
-        onTerrainChange(next)
-        return
+      for (const [x, y, z] of free) {
+        const k = centerKey(x, y, z)
+        byKey.set(k, { position: [x, y, z], color })
       }
-      onTerrainChange([...currentTerrain, { position: [sx, sy, sz], color }])
+      onTerrainChange([...byKey.values()])
     }
 
     dom.addEventListener('click', onPlaceClick)
@@ -450,15 +505,12 @@ export function TerrainEditor({
 
   return (
     <group ref={previewGroupRef} visible={false}>
-      <mesh raycast={() => null}>
-        <boxGeometry args={[1, 1, 1]} />
-        <meshBasicMaterial
-          ref={previewMatRef}
-          transparent
-          opacity={0.28}
-          depthWrite={false}
-        />
-      </mesh>
+      <instancedMesh
+        ref={previewInstRef}
+        args={[previewBoxGeo, previewMaterial, PREVIEW_INSTANCE_CAP]}
+        frustumCulled={false}
+        raycast={() => null}
+      />
     </group>
   )
 }
